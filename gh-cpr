@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: gh cpr <new-branch> <pr-title>
+
+Create a branch from the current branch, make an empty commit, create a
+self-assigned draft pull request targeting the original branch, and open it.
+
+Example:
+  gh cpr feat/add-search "Add search"
+USAGE
+}
+
+if [[ $# -eq 1 && ( $1 == --help || $1 == -h ) ]]; then
+  usage
+  exit 0
+fi
+if [[ $# -ne 2 || -z $1 || -z $2 ]]; then
+  usage >&2
+  exit 1
+fi
+
+new_branch=$1
+title=$2
+base_branch=$(git symbolic-ref --quiet --short HEAD) || {
+  echo 'gh cpr: Run from a branch in a Git repository (detached HEAD is unsupported).' >&2
+  exit 1
+}
+git rev-parse --verify HEAD >/dev/null 2>&1 || {
+  echo 'gh cpr: Create an initial commit before running this command.' >&2
+  exit 1
+}
+git check-ref-format --branch "$new_branch" >/dev/null
+
+git switch -c "$new_branch"
+# --only with no paths leaves staged changes out of the empty commit.
+git commit --allow-empty --only -m "$title"
+gh pr create --base "$base_branch" --assignee '@me' --draft --title "$title"
+gh pr view --web
